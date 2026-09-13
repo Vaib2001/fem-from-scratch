@@ -1,161 +1,349 @@
 import numpy as np
 
 
-def element_stiffness(E, A, length):
+def validate_inputs(length, area, youngs_modulus, force, num_elements):
     """
-    Return the stiffness matrix of a 2-node 1D bar element.
+    Validate the physical and numerical input parameters.
     """
-    return (E * A / length) * np.array([
+
+    if length <= 0:
+        raise ValueError("Bar length must be greater than zero.")
+
+    if area <= 0:
+        raise ValueError("Cross-sectional area must be greater than zero.")
+
+    if youngs_modulus <= 0:
+        raise ValueError("Young's modulus must be greater than zero.")
+
+    if not np.isfinite(force):
+        raise ValueError("Applied force must be finite.")
+
+    if not isinstance(num_elements, int) or num_elements < 1:
+        raise ValueError("Number of elements must be a positive integer.")
+
+
+def element_stiffness(youngs_modulus, area, element_length):
+    """
+    Return the stiffness matrix of a 2-node linear bar element.
+
+    Parameters
+    ----------
+    youngs_modulus : float
+        Young's modulus [Pa].
+    area : float
+        Cross-sectional area [m^2].
+    element_length : float
+        Length of the finite element [m].
+
+    Returns
+    -------
+    ndarray
+        2 x 2 element stiffness matrix.
+    """
+
+    return (
+        youngs_modulus * area / element_length
+    ) * np.array([
         [1.0, -1.0],
         [-1.0, 1.0]
     ])
 
 
-def solve_bar(length, area, youngs_modulus, force, num_elements):
+def analytical_displacement(
+    x,
+    area,
+    youngs_modulus,
+    force
+):
+    """
+    Analytical displacement field for a uniform axial bar.
+
+    u(x) = P*x / (E*A)
+    """
+
+    x = np.asarray(x, dtype=float)
+
+    return (
+        force * x
+        / (youngs_modulus * area)
+    )
+
+
+def analytical_stress(area, force):
+    """
+    Analytical axial stress for a uniform bar.
+
+    sigma = P / A
+    """
+
+    return force / area
+
+
+def solve_bar(
+    length,
+    area,
+    youngs_modulus,
+    force,
+    num_elements
+):
     """
     Solve a fixed-free 1D axial bar using the Finite Element Method.
+
+    The bar is fixed at x = 0 and subjected to an axial point load
+    at x = L.
 
     Parameters
     ----------
     length : float
-        Total bar length [m]
+        Total bar length [m].
     area : float
-        Cross-sectional area [m^2]
+        Cross-sectional area [m^2].
     youngs_modulus : float
-        Young's modulus [Pa]
+        Young's modulus [Pa].
     force : float
-        Axial force applied at the free end [N]
+        Axial force applied at the free end [N].
     num_elements : int
-        Number of finite elements
+        Number of finite elements.
 
     Returns
     -------
     nodes : ndarray
-        Node coordinates
+        Nodal coordinates [m].
     displacements : ndarray
-        Nodal displacements
+        Nodal displacements [m].
     stresses : ndarray
-        Stress in each element
+        Element stresses [Pa].
     """
+
+    validate_inputs(
+        length,
+        area,
+        youngs_modulus,
+        force,
+        num_elements
+    )
+
+    # ---------------------------------------------------------
+    # 1. Generate the finite-element mesh
+    # ---------------------------------------------------------
 
     num_nodes = num_elements + 1
 
-    # ---------------------------------------------------------
-    # 1. Generate mesh
-    # ---------------------------------------------------------
-    nodes = np.linspace(0.0, length, num_nodes)
+    nodes = np.linspace(
+        0.0,
+        length,
+        num_nodes
+    )
 
     element_length = length / num_elements
 
     # ---------------------------------------------------------
-    # 2. Initialize global stiffness matrix and force vector
+    # 2. Initialize global system
+    #
+    # K u = F
     # ---------------------------------------------------------
-    K = np.zeros((num_nodes, num_nodes))
-    F = np.zeros(num_nodes)
+
+    global_stiffness = np.zeros(
+        (num_nodes, num_nodes)
+    )
+
+    global_force = np.zeros(num_nodes)
 
     # ---------------------------------------------------------
-    # 3. Assemble global stiffness matrix
+    # 3. Compute element stiffness matrix
     # ---------------------------------------------------------
+
     ke = element_stiffness(
         youngs_modulus,
         area,
         element_length
     )
 
+    # ---------------------------------------------------------
+    # 4. Assemble global stiffness matrix
+    # ---------------------------------------------------------
+
     for element in range(num_elements):
 
-        node_1 = element
-        node_2 = element + 1
+        element_dofs = np.array([
+            element,
+            element + 1
+        ])
 
-        element_nodes = [node_1, node_2]
-
-        for i in range(2):
-            for j in range(2):
-                K[element_nodes[i], element_nodes[j]] += ke[i, j]
-
-    # ---------------------------------------------------------
-    # 4. Apply external force
-    # ---------------------------------------------------------
-    F[-1] = force
+        global_stiffness[
+            np.ix_(
+                element_dofs,
+                element_dofs
+            )
+        ] += ke
 
     # ---------------------------------------------------------
-    # 5. Apply boundary condition
+    # 5. Apply external point load
+    # ---------------------------------------------------------
+
+    global_force[-1] = force
+
+    # ---------------------------------------------------------
+    # 6. Apply essential boundary condition
     #
-    # Node 0 is fixed:
     # u(0) = 0
     # ---------------------------------------------------------
-    free_dofs = np.arange(1, num_nodes)
 
-    K_reduced = K[np.ix_(free_dofs, free_dofs)]
-    F_reduced = F[free_dofs]
+    free_dofs = np.arange(
+        1,
+        num_nodes
+    )
+
+    reduced_stiffness = global_stiffness[
+        np.ix_(
+            free_dofs,
+            free_dofs
+        )
+    ]
+
+    reduced_force = global_force[
+        free_dofs
+    ]
 
     # ---------------------------------------------------------
-    # 6. Solve K u = F
+    # 7. Solve reduced finite-element system
     # ---------------------------------------------------------
+
     displacements = np.zeros(num_nodes)
 
-    displacements[free_dofs] = np.linalg.solve(
-        K_reduced,
-        F_reduced
+    displacements[
+        free_dofs
+    ] = np.linalg.solve(
+        reduced_stiffness,
+        reduced_force
     )
 
     # ---------------------------------------------------------
-    # 7. Calculate element stresses
+    # 8. Recover element strains and stresses
     # ---------------------------------------------------------
-    stresses = np.zeros(num_elements)
 
-    for element in range(num_elements):
+    strains = (
+        np.diff(displacements)
+        / element_length
+    )
 
-        u1 = displacements[element]
-        u2 = displacements[element + 1]
-
-        strain = (u2 - u1) / element_length
-
-        stresses[element] = youngs_modulus * strain
+    stresses = (
+        youngs_modulus
+        * strains
+    )
 
     return nodes, displacements, stresses
 
 
 if __name__ == "__main__":
 
+    # ---------------------------------------------------------
     # Example engineering problem
+    # ---------------------------------------------------------
 
-    L = 1.0          # m
-    A = 0.01         # m^2
-    E = 210e9        # Pa
-    P = 100000.0     # N
+    LENGTH = 1.0               # m
+    AREA = 0.01                # m^2
+    YOUNGS_MODULUS = 210e9     # Pa
+    FORCE = 100000.0           # N
+    NUM_ELEMENTS = 4
 
-    number_of_elements = 4
-
-    nodes, u, stress = solve_bar(
-        L,
-        A,
-        E,
-        P,
-        number_of_elements
+    nodes, displacements, stresses = solve_bar(
+        LENGTH,
+        AREA,
+        YOUNGS_MODULUS,
+        FORCE,
+        NUM_ELEMENTS
     )
 
-    # Analytical displacement at free end
-    analytical_displacement = P * L / (E * A)
+    # ---------------------------------------------------------
+    # Analytical solution
+    # ---------------------------------------------------------
 
-    print("Node coordinates:")
+    exact_displacements = analytical_displacement(
+        nodes,
+        AREA,
+        YOUNGS_MODULUS,
+        FORCE
+    )
+
+    exact_tip_displacement = analytical_displacement(
+        LENGTH,
+        AREA,
+        YOUNGS_MODULUS,
+        FORCE
+    )
+
+    exact_stress = analytical_stress(
+        AREA,
+        FORCE
+    )
+
+    absolute_error = abs(
+        displacements[-1]
+        - exact_tip_displacement
+    )
+
+    if abs(exact_tip_displacement) > 0:
+
+        relative_error = (
+            absolute_error
+            / abs(exact_tip_displacement)
+        )
+
+    else:
+
+        relative_error = 0.0
+
+    # ---------------------------------------------------------
+    # Display results
+    # ---------------------------------------------------------
+
+    print("=" * 55)
+    print("1D AXIAL BAR - FINITE ELEMENT ANALYSIS")
+    print("=" * 55)
+
+    print(f"\nNumber of elements : {NUM_ELEMENTS}")
+    print(f"Number of nodes    : {len(nodes)}")
+
+    print("\nNode coordinates [m]")
     print(nodes)
 
-    print("\nNodal displacements [m]:")
-    print(u)
+    print("\nNodal displacements [m]")
+    print(displacements)
 
-    print("\nElement stresses [Pa]:")
-    print(stress)
+    print("\nElement stresses [Pa]")
+    print(stresses)
 
-    print("\nFEM displacement at free end:")
-    print(u[-1])
+    print("\n" + "-" * 55)
+    print("ANALYTICAL VALIDATION")
+    print("-" * 55)
 
-    print("\nAnalytical displacement at free end:")
-    print(analytical_displacement)
+    print(
+        f"FEM tip displacement        : "
+        f"{displacements[-1]:.8e} m"
+    )
 
-    relative_error = abs(
-        u[-1] - analytical_displacement
-    ) / analytical_displacement
+    print(
+        f"Analytical tip displacement : "
+        f"{exact_tip_displacement:.8e} m"
+    )
 
-    print("\nRelative error:")
-    print(relative_error)
+    print(
+        f"Absolute error              : "
+        f"{absolute_error:.8e} m"
+    )
+
+    print(
+        f"Relative error              : "
+        f"{relative_error:.8e}"
+    )
+
+    print(
+        f"FEM stress                  : "
+        f"{stresses[-1] / 1e6:.6f} MPa"
+    )
+
+    print(
+        f"Analytical stress           : "
+        f"{exact_stress / 1e6:.6f} MPa"
+    )
