@@ -4,25 +4,31 @@
 
 Finite Element Method implementations developed from first principles in Python and verified against analytical solutions.
 
-The project focuses on the numerical mechanics behind FEM: element formulation, global assembly, boundary conditions, solution procedures, stress recovery, verification, mesh convergence, and automated numerical testing.
+The project focuses on the numerical mechanics behind FEM: element formulation, global assembly, boundary conditions, solution procedures, stress recovery, analytical verification, mesh convergence, automated numerical testing, and reproducible engineering workflows.
 
 ---
 
 ## Overview
 
-The repository currently contains two one-dimensional structural mechanics problems.
+This repository currently contains two one-dimensional structural mechanics problems:
 
-The **uniform axial bar** provides a clean introduction to the FEM formulation and demonstrates analytical verification.
+1. **Uniform axial bar**
+2. **Tapered axial bar**
 
-The **tapered axial bar** introduces a spatially varying cross-section, producing a nonlinear displacement field and a genuine finite-element discretization error. This makes it possible to investigate mesh convergence and estimate the numerical convergence rate.
+The uniform bar introduces the basic finite-element formulation and provides an exact analytical benchmark.
+
+The tapered bar introduces a spatially varying cross-section and therefore a nonlinear exact displacement field. This produces genuine finite-element discretization error and allows mesh convergence to be studied quantitatively.
 
 ### Current capabilities
 
 - 2-node linear axial bar elements
+- element stiffness formulation
 - global stiffness-matrix assembly
-- essential and natural boundary conditions
+- essential boundary conditions
+- external nodal loading
 - nodal displacement solution
-- strain and stress recovery
+- strain recovery
+- stress recovery
 - analytical verification
 - variable cross-sectional area
 - mesh-refinement studies
@@ -35,9 +41,9 @@ The **tapered axial bar** introduces a spatially varying cross-section, producin
 
 # 1. Uniform Axial Bar
 
-Consider a prismatic elastic bar with length \(L\), cross-sectional area \(A\), and Young's modulus \(E\).
+Consider a prismatic elastic bar with length $L$, cross-sectional area $A$, and Young's modulus $E$.
 
-The left end is fixed and an axial load \(P\) is applied at the right end.
+The left end is fixed and an axial load $P$ is applied at the right end.
 
 ```text
 x = 0                                      x = L
@@ -47,146 +53,158 @@ x = 0                                      x = L
 Fixed
 ```
 
-The governing equation is
+The governing differential equation is
 
-$$
+```math
 -\frac{d}{dx}
 \left(
 EA\frac{du}{dx}
 \right)
 =0
-$$
+```
 
-with boundary conditions
+with the displacement boundary condition
 
-$$
+```math
 u(0)=0
-$$
+```
 
-and
+and the traction boundary condition
 
-$$
-EA\frac{du}{dx}\bigg|_{x=L}=P.
-$$
+```math
+EA\frac{du}{dx}\bigg|_{x=L}=P
+```
 
 ---
 
-## Finite-element formulation
+## Finite-Element Formulation
 
-For a two-node linear bar element,
+For a two-node linear bar element, the element displacement vector is
 
-$$
+```math
 \mathbf{u}^{(e)}
 =
 \begin{bmatrix}
 u_1 \\
 u_2
-\end{bmatrix}.
-$$
+\end{bmatrix}
+```
 
 Using linear shape functions, the element stiffness matrix becomes
 
-$$
+```math
 \mathbf{k}^{(e)}
 =
 \frac{EA}{L_e}
 \begin{bmatrix}
 1 & -1 \\
 -1 & 1
-\end{bmatrix}.
-$$
+\end{bmatrix}
+```
 
-The element contributions are assembled into the global system
+where $L_e$ is the element length.
 
-$$
+The individual element matrices are assembled into the global equilibrium system
+
+```math
 \mathbf{K}\mathbf{u}
 =
-\mathbf{F}.
-$$
+\mathbf{F}
+```
 
-After imposing the fixed displacement boundary condition, the reduced system is solved using `numpy.linalg.solve`.
+After imposing the fixed displacement boundary condition, the reduced linear system is solved using `numpy.linalg.solve`.
 
 ---
 
-## Analytical solution
+## Analytical Solution
 
-For the uniform bar,
+For a uniform axial bar subjected to a constant end load,
 
-$$
+```math
 u(x)
 =
-\frac{Px}{EA}.
-$$
+\frac{Px}{EA}
+```
 
 The axial strain is
 
-$$
+```math
 \varepsilon
 =
 \frac{du}{dx}
 =
-\frac{P}{EA},
-$$
+\frac{P}{EA}
+```
 
-and therefore
+and therefore the axial stress is
 
-$$
+```math
 \sigma
 =
 E\varepsilon
 =
-\frac{P}{A}.
-$$
+\frac{P}{A}
+```
 
-The reference problem uses:
+### Reference problem
 
 | Parameter | Value |
 |---|---:|
-| Length \(L\) | 1.0 m |
-| Cross-sectional area \(A\) | 0.01 m² |
-| Young's modulus \(E\) | 210 GPa |
-| Applied load \(P\) | 100 kN |
-| Finite elements | 4 |
+| Length $L$ | 1.0 m |
+| Cross-sectional area $A$ | 0.01 m² |
+| Young's modulus $E$ | 210 GPa |
+| Applied load $P$ | 100 kN |
+| Number of finite elements | 4 |
 
 The analytical tip displacement is
 
-$$
+```math
 u(L)
 =
 4.7619\times10^{-5}\ \text{m}
-=
-0.047619\ \text{mm},
-$$
+```
 
-while the axial stress is
+or
 
-$$
+```math
+u(L)
+\approx
+0.047619\ \text{mm}
+```
+
+The corresponding axial stress is
+
+```math
 \sigma
 =
-10\ \text{MPa}.
-$$
+10\ \text{MPa}
+```
 
 ---
 
-## Displacement verification
+## Displacement Verification
 
 ![Uniform bar displacement](results/displacement_comparison.png)
 
-The FEM nodes coincide with the analytical displacement field.
+The FEM nodal solution coincides with the analytical displacement field.
 
-This is expected: the exact solution is linear in \(x\), while the two-node bar element also uses linear displacement interpolation. The exact solution therefore lies within the finite-element approximation space.
+This is expected because the exact solution is linear in $x$, while the two-node axial element also uses linear displacement interpolation.
+
+Therefore, the exact solution lies inside the finite-element approximation space for this particular problem.
 
 ---
 
-## Stress verification
+## Stress Verification
 
 ![Uniform bar stress](results/stress_distribution.png)
 
-The finite-element stress remains constant along the bar and agrees with the analytical value
+The finite-element stress remains constant along the bar and agrees with the analytical result
 
-$$
-\sigma = 10\ \text{MPa}.
-$$
+```math
+\sigma
+=
+10\ \text{MPa}
+```
 
 ---
 
@@ -196,46 +214,60 @@ The second problem introduces a cross-sectional area that varies continuously al
 
 The area is defined as
 
-$$
+```math
 A(x)
 =
 A_0
 \left(
 1+\alpha\frac{x}{L}
-\right),
-$$
+\right)
+```
 
-where \(A_0\) is the area at the fixed end and \(\alpha\) controls the taper.
+where $A_0$ is the area at the fixed end and $\alpha$ controls the taper.
 
 For the implemented example,
 
-$$
-\alpha=1,
-$$
+```math
+\alpha = 1
+```
 
 which gives
 
-$$
-A(L)=2A_0.
-$$
+```math
+A(L)
+=
+2A_0
+```
 
-Unlike the uniform-bar problem, the exact displacement field is no longer linear.
+The bar therefore becomes progressively wider toward the loaded end.
+
+Unlike the uniform-bar problem, the exact displacement field is now nonlinear.
 
 ---
 
-## Analytical solution
+## Governing Relation
 
-For a constant axial force \(P\),
+For a constant axial force $P$,
 
-$$
+```math
+N(x)
+=
+EA(x)\frac{du}{dx}
+=
+P
+```
+
+Therefore,
+
+```math
 \frac{du}{dx}
 =
-\frac{P}{EA(x)}.
-$$
+\frac{P}{EA(x)}
+```
 
-Substituting the linearly varying area gives
+Substituting the linearly varying area,
 
-$$
+```math
 \frac{du}{dx}
 =
 \frac{P}
@@ -244,12 +276,32 @@ EA_0
 \left(
 1+\alpha x/L
 \right)
-}.
-$$
+}
+```
 
-Integrating from the fixed end gives
+---
 
-$$
+## Analytical Displacement
+
+Integrating from the fixed boundary gives
+
+```math
+u(x)
+=
+\int_0^x
+\frac{P}
+{
+EA_0
+\left(
+1+\alpha \xi/L
+\right)
+}
+\,d\xi
+```
+
+which results in
+
+```math
 u(x)
 =
 \frac{PL}
@@ -259,61 +311,152 @@ EA_0\alpha
 \ln
 \left(
 1+\alpha\frac{x}{L}
-\right).
-$$
+\right)
+```
 
-The exact stress field is
+The exact tip displacement is therefore
 
-$$
-\sigma(x)
+```math
+u(L)
 =
-\frac{P}{A(x)}.
-$$
+\frac{PL}
+{
+EA_0\alpha
+}
+\ln(1+\alpha)
+```
 
-Because the exact displacement is logarithmic rather than linear, linear finite elements only approximate the solution.
+For $\alpha=1$,
+
+```math
+u(L)
+=
+\frac{PL}
+{
+EA_0
+}
+\ln(2)
+```
 
 ---
 
-## Tapered-bar displacement
+## Analytical Stress
+
+Since the internal axial force remains equal to $P$,
+
+```math
+\sigma(x)
+=
+\frac{P}{A(x)}
+```
+
+Substituting the tapered area,
+
+```math
+\sigma(x)
+=
+\frac{P}
+{
+A_0
+\left(
+1+\alpha x/L
+\right)
+}
+```
+
+As the cross-sectional area increases, the axial stress decreases along the bar.
+
+---
+
+## Tapered-Bar FEM Formulation
+
+The same two-node linear axial element is used.
+
+For each element,
+
+```math
+\mathbf{k}^{(e)}
+=
+\int_{x_1}^{x_2}
+\mathbf{B}^{T}
+EA(x)
+\mathbf{B}
+\,dx
+```
+
+For a two-node linear bar element, $\mathbf{B}$ is constant within the element.
+
+Because $A(x)$ varies linearly, the element-integrated stiffness can be evaluated exactly using the element-average area
+
+```math
+A_{\mathrm{avg}}
+=
+\frac{A(x_1)+A(x_2)}{2}
+```
+
+which gives
+
+```math
+\mathbf{k}^{(e)}
+=
+\frac{
+E A_{\mathrm{avg}}
+}{
+L_e
+}
+\begin{bmatrix}
+1 & -1 \\
+-1 & 1
+\end{bmatrix}
+```
+
+---
+
+## Tapered-Bar Displacement
 
 ![Tapered bar displacement](results/tapered_displacement.png)
 
-The finite-element solution follows the analytical displacement field closely while retaining the piecewise-linear nature of the numerical approximation.
+The finite-element solution closely follows the analytical displacement field.
+
+Unlike the uniform-bar case, the exact solution is logarithmic rather than linear. Therefore, a finite number of linear elements cannot reproduce it exactly.
+
+This introduces genuine discretization error.
 
 ---
 
-## Tapered-bar stress
+## Tapered-Bar Stress
 
 ![Tapered bar stress](results/tapered_stress.png)
 
-As the cross-sectional area increases toward the free end, the axial stress decreases according to
+The analytical stress decreases continuously along the bar according to
 
-$$
+```math
 \sigma(x)
 =
-\frac{P}{A(x)}.
-$$
+\frac{P}{A(x)}
+```
 
-The FEM element stresses approach the continuous analytical stress field.
+The finite-element solution produces piecewise-constant element stresses that approach the analytical stress distribution as the mesh is refined.
 
 ---
 
-# Mesh Convergence
+# Mesh Convergence Study
 
 A central requirement of a reliable finite-element implementation is that the numerical solution approaches the exact solution as the mesh is refined.
 
-The tapered bar is solved using
+The tapered bar is therefore solved using
 
-$$
-N =
+```math
+N
+=
 1,\ 2,\ 4,\ 8,\ 16,\ 32,\ 64
-$$
+```
 
-elements.
+finite elements.
 
-The relative tip-displacement error is evaluated as
+The relative error in tip displacement is calculated as
 
-$$
+```math
 e_{\mathrm{rel}}
 =
 \frac{
@@ -326,42 +469,64 @@ u_{\mathrm{exact}}(L)
 \left|
 u_{\mathrm{exact}}(L)
 \right|
-}.
-$$
-
-![Mesh convergence](results/tapered_convergence.png)
-
-The error decreases systematically as the number of elements increases.
-
-The observed behaviour is approximately
-
-$$
-e
-\propto
-N^{-2},
-$$
-
-which is consistent with the expected convergence behaviour of linear finite elements for this displacement quantity.
-
-This provides a numerical verification that the implementation converges toward the analytical solution under mesh refinement.
+}
+```
 
 ---
 
-# Automated Verification
+## Convergence Result
 
-The repository contains automated numerical tests using `pytest`.
+![Mesh convergence](results/tapered_convergence.png)
 
-The test suite verifies the fixed boundary condition, the analytical tip displacement of the uniform bar, the analytical uniform stress state, reduction of tapered-bar error under mesh refinement, and accuracy of a sufficiently refined tapered-bar solution.
+The relative error decreases systematically as the mesh is refined.
 
-The complete test suite is executed automatically by GitHub Actions after changes are pushed to the repository.
+The observed behaviour is approximately
 
-A successful workflow therefore checks both that the implementation executes correctly and that key numerical and physical properties remain satisfied.
+```math
+e
+\propto
+N^{-2}
+```
+
+or equivalently,
+
+```math
+e
+=
+O(N^{-2})
+```
+
+This corresponds to approximately second-order convergence for the evaluated tip-displacement quantity.
+
+The convergence study demonstrates that the numerical solution approaches the analytical solution under systematic mesh refinement.
+
+---
+
+# Numerical Verification Tests
+
+The repository includes automated tests using `pytest`.
+
+The current test suite verifies:
+
+- the fixed-end displacement is exactly zero,
+- the uniform-bar FEM tip displacement matches the analytical solution,
+- the uniform-bar stress matches $P/A$,
+- tapered-bar error decreases under mesh refinement,
+- a sufficiently refined tapered-bar mesh achieves the required numerical accuracy.
+
+The tests can be run with
+
+```bash
+pytest -q
+```
+
+A successful test run verifies important numerical and physical properties of the implementation rather than only checking whether the Python scripts execute.
 
 ---
 
 # Continuous Integration
 
-The GitHub Actions workflow automatically performs the complete analysis pipeline:
+GitHub Actions automatically executes the complete numerical-analysis workflow after changes are pushed to `main`.
 
 ```text
 Push to main
@@ -373,13 +538,13 @@ Create clean Python environment
 Install dependencies
      │
      ▼
-Run uniform-bar solver
+Run uniform-bar FEM solver
      │
      ▼
 Generate uniform-bar figures
      │
      ▼
-Run tapered-bar solver
+Run tapered-bar FEM solver
      │
      ▼
 Run mesh-convergence study
@@ -391,7 +556,9 @@ Run numerical verification tests
 Update generated FEM results
 ```
 
-This makes the numerical analysis reproducible independently of the local development environment.
+This makes the project reproducible independently of the local development environment.
+
+A green workflow status therefore indicates that the solver, post-processing pipeline, convergence analysis, and numerical verification tests have completed successfully.
 
 ---
 
@@ -415,6 +582,7 @@ fem-from-scratch/
 │   └── test_fem.py
 │
 ├── results/
+│   ├── README.md
 │   ├── displacement_comparison.png
 │   ├── stress_distribution.png
 │   ├── tapered_displacement.png
@@ -431,13 +599,13 @@ fem-from-scratch/
 
 # Running the Project
 
-Install the required packages:
+Install the required Python packages:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run the uniform-bar analysis:
+Run the uniform-bar FEM analysis:
 
 ```bash
 python src/bar_1d.py
@@ -455,7 +623,7 @@ Run the tapered-bar analysis:
 python src/tapered_bar.py
 ```
 
-Run the convergence study:
+Run the mesh-convergence study:
 
 ```bash
 python src/convergence_study.py
@@ -467,21 +635,52 @@ Run the numerical verification tests:
 pytest -q
 ```
 
+Generated engineering figures are stored in the `results/` directory.
+
 ---
 
 # Engineering Concepts Demonstrated
 
-This repository demonstrates the progression from an elementary finite-element formulation to numerical verification of a non-trivial problem.
+This repository demonstrates:
 
-In particular, it covers stiffness formulation, matrix assembly, degree-of-freedom handling, displacement boundary conditions, force boundary conditions, stress recovery, analytical verification, discretization error, mesh refinement, convergence-rate estimation, scientific visualization, automated testing, and continuous integration.
+- finite-element discretization
+- shape-function-based formulation
+- element stiffness matrices
+- global matrix assembly
+- degree-of-freedom handling
+- essential boundary conditions
+- natural boundary conditions
+- numerical solution of linear systems
+- displacement recovery
+- strain calculation
+- stress recovery
+- variable material geometry
+- analytical verification
+- discretization error
+- systematic mesh refinement
+- convergence-rate estimation
+- scientific visualization
+- automated numerical testing
+- continuous integration
+- reproducible computational workflows
 
 ---
 
 # Future Development
 
-The next stage of the project will extend the formulation from one-dimensional axial mechanics toward multi-dimensional structural FEM.
+The next stage will extend the formulation from one-dimensional axial mechanics toward multi-dimensional structural FEM.
 
-Planned extensions include spring elements, 2D truss elements, local-to-global coordinate transformations, arbitrary truss geometries, distributed loading, 2D linear elasticity, triangular elements, and stress-field visualization.
+Planned extensions include:
+
+- spring elements
+- 2D truss elements
+- local-to-global coordinate transformations
+- arbitrary truss geometries
+- distributed loading
+- 2D linear elasticity
+- constant-strain triangular elements
+- stress-field visualization
+- comparison against established FEM software
 
 ---
 
