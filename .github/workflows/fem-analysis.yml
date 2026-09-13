@@ -30,13 +30,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run FEM solver
+      - name: Run uniform-bar FEM solver
         run: python src/bar_1d.py
 
-      - name: Generate FEM plots
+      - name: Generate uniform-bar results
         run: python src/visualize_bar.py
 
-      - name: Commit updated result figures
+      - name: Run tapered-bar FEM solver
+        run: python src/tapered_bar.py
+
+      - name: Run mesh convergence study
+        run: python src/convergence_study.py
+
+      - name: Commit updated FEM results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
