@@ -4,7 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "results/**"
+
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   run-fem:
@@ -24,14 +30,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run 1D FEM solver
+      - name: Run FEM solver
         run: python src/bar_1d.py
 
       - name: Generate FEM plots
         run: python src/visualize_bar.py
 
-      - name: Upload FEM results
-        uses: actions/upload-artifact@v4
-        with:
-          name: fem-results
-          path: results/
+      - name: Commit updated result figures
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add results/
+
+          if git diff --cached --quiet; then
+            echo "No changes in FEM results."
+          else
+            git commit -m "Update generated FEM results"
+            git push
+          fi
