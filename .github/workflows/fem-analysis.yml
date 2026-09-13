@@ -41,7 +41,10 @@ jobs:
 
       - name: Run mesh convergence study
         run: python src/convergence_study.py
-
+        
+      - name: Run numerical verification tests
+        run: pytest -q
+        
       - name: Commit updated FEM results
         run: |
           git config user.name "github-actions[bot]"
